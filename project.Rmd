@@ -1,0 +1,107 @@
+---
+title: "Practical Machine Learning Course Project Report"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, warning = F)
+```
+# Background
+
+## Human Activity Recognition
+### Weight Lifting Exercises Dataset
+
+Detailed information about the dataset is available at http://groupware.les.inf.puc-rio.br/har
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E)
+
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.This is a report describing how I built the model, the cross validation, expected out of sample error is. 
+I will also use the prediction model to predict 20 different test cases (provided)
+
+Training and test data are available on the following URLs
+```{r}
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+```
+## Loading the required libraries for the project
+```{r warning=F}
+library(caret)
+library(ggplot2)
+library(randomForest)
+library(RColorBrewer)
+library(rattle)
+library(dplyr)
+set.seed(5000) # for reproducibility
+```
+## Loading the data
+```{r}
+
+if (!file.exists("train.csv")){ # check if the large file is already downloaded
+download.file(trainUrl,"train.csv")
+download.file(testUrl,"test.csv")
+}
+
+data <- read.csv(file="train.csv") %>% as_tibble()
+```
+## Splitting the data into training and validation sets
+```{r}
+index_train <- createDataPartition(data$classe,p=0.7,list=F)
+training <- data[index_train,]
+validation <- data[-index_train,]
+testing <- read.csv(file="test.csv") %>% as_tibble()
+```
+## having a glimpse of the data
+```{r}
+training %>% glimpse()
+```
+## Creating a function to preprocess the training, validation and testing data and choosing the columns to be used for the ML model
+```{r}
+my_preprocess <- function(df,cols_to_remove){
+  df <-df[,-cols_to_remove]
+  # replacing NAs with zeros
+  df[is.na(df)] <- 0
+return(df)
+}
+
+# finding near-zero variance variables and other columns to remove
+NZV <- nearZeroVar(training)
+cols_to_remove <- c(1,2,3,4,5,6) %>% append(NZV)
+# preparing the training data
+training2 <- training %>% my_preprocess(cols_to_remove)
+# preparing the testing data
+validation2 <- validation %>% my_preprocess(cols_to_remove)%>% select(-c("classe"))
+
+```
+## Fitting 2 models, using rpart and random forest algorithms
+```{r}
+# fitting the models
+model_rp <- rpart::rpart(classe~.,training2)
+model_rf <- randomForest(classe~.,training2)
+
+```
+## Predicting and comparing the prformance of both models on validation data
+```{r}
+pred_rp<- predict(model_rp,validation2,type = "class")
+pred_rf<- predict(model_rf,validation2,type = "class")
+
+```
+### Confusion matrix for the rpart model
+```{r}
+confusionMatrix(pred_rp, validation$classe)
+```
+### Confusion matrix for the random forest model
+```{r}
+confusionMatrix(pred_rf, validation$classe)
+```
+### We can see that the random forest model is performing quite well. 
+
+### Now using the trained random forest model to predict classes for the test dataset. I think the out of the sample accuracy also will be over 99%.
+```{r}
+# run the prediction using the same preprocess function used for training and validation data
+pred_test <- predict(model_rf,testing %>% my_preprocess(cols_to_remove))
+# print the results
+pred_test
+
+```
+
